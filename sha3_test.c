@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: BSD-2-Clause
+/*
+ * SHA3 C / RV64 Implementation - Test suite
+ * Copyright (C) 2019 Nick Kossifidis <mick@ics.forth.gr>
+ */
+
+#include <stdio.h>	/* For printf() */
+#include <stdlib.h>	/* For malloc() */
+#include <time.h>	/* For clock() */
+#include <string.h>	/* For memset() */
+#include "sha3.h"
+
+/*
+ * To verify the output check out:
+ * https://www.di-mgt.com.au/sha_testvectors.html
+ */
+
+static void
+sha3_print(const char* md, size_t md_len)
+{
+	int i = 0;
+	for(i = 0; i < md_len; i++)
+		printf("%02X", md[i] & 0xFF);
+	printf("\n");
+}
+
+static clock_t
+sha3_test(int print, char* amillion_as) {
+	char md256[32] = {0};
+	char md512[64] = {0};
+	clock_t start = 0;
+	clock_t end = 0;
+
+	start = clock();
+
+	sha3_256_oneshot("", 0, md256);
+	if(print) {
+		printf("SHA3-256 of empty string:\t");
+		sha3_print((const char*) md256, 32);
+	}
+
+	sha3_512_oneshot("", 0, md512);
+	if(print) {
+		printf("SHA3-512 of empty string:\t");
+		sha3_print((const char*) md512, 64);
+	}
+
+	sha3_256_oneshot("abc", 3, md256);
+	if(print) {
+		printf("SHA3-256 of \"abc\":\t\t");
+		sha3_print((const char*) md256, 32);
+	}
+
+	sha3_512_oneshot("abc", 3, md512);
+	if(print) {
+		printf("SHA3-512 of \"abc\":\t\t");
+		sha3_print((const char*) md512, 64);
+	}
+
+	sha3_256_oneshot("test", 4, md256);
+	if(print) {
+		printf("SHA3-256 of \"test\":\t\t");
+		sha3_print((const char*) md256, 32);
+	}
+
+	sha3_512_oneshot("test", 3, md512);
+	if(print) {
+		printf("SHA3-512 of \"test\":\t\t");
+		sha3_print((const char*) md512, 64);
+	}
+
+	sha3_256_oneshot(amillion_as, 1000000, md256);
+	if(print) {
+		printf("SHA3-256 of 1mil 'a's:\t\t");
+		sha3_print((const char*) md256, 32);
+	}
+
+	sha3_512_oneshot(amillion_as, 1000000, md512);
+	if(print) {
+		printf("SHA3-512 of 1mil 'a's:\t\t");
+		sha3_print((const char*) md512, 64);
+	}
+
+	end = clock();
+
+	return (end - start);
+}
+
+int
+main()
+{
+	clock_t test_dur = 0;
+	double ema = 0;
+	double n = 10;
+	char *amillion_as = NULL;
+	int i = 0;
+
+	amillion_as = malloc(sizeof(char) * 1000000);
+	memset(amillion_as, 0x61, sizeof(char) * 1000000);
+
+	for(i = 0; i < n; i++) {
+		test_dur = sha3_test(!i, amillion_as);
+		ema = ((ema * (n - 1)) + test_dur) / n;
+	}
+	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
+
+}
