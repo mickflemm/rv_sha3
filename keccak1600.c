@@ -364,13 +364,17 @@ keccakf1600_state_permute(k1600_state_t * st)
 #elif defined(USE_UNROLLED_CF)
 
 /*
- * This implementation is more cache-friendly since it
- * doesn't mess with A all the time, resulting cache misses.
- * Instead of modifying A in-place as we do above, we save
- * the result of each round to an intermediate state and
- * then do the next round with that intermediate state as
- * input and A as output. Since the number of rounds is
- * even we will end up with A in the end.
+ * On the above approach when modifying A in-place, we
+ * go back and forth accessing lanes that are often
+ * further away than a cache line (e.g. 24 -> 4), resulting
+ * cache line misses. Here instead of modifying A in-place,
+ * we switch between A and an intermediate state so that
+ * we can load from one and store to the other. Since
+ * the number of rounds is even we will end up with A
+ * at the end. We also access lanes that are no further
+ * than 6 lanes away each time. This way we get fewer
+ * cache-line misses and also allow OoO CPUs to be more
+ * efficient.
  *
  * This is the default approach in OpenSSL (KECCAK_2X)
  */
