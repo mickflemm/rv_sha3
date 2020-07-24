@@ -89,7 +89,7 @@ sha3_test(int print, char* amillion_as) {
 int
 main()
 {
-	clock_t test_dur = 0;
+	double test_dur = 0;
 	double ema = 0;
 	double n = 10;
 	char *amillion_as = NULL;
@@ -99,8 +99,8 @@ main()
 	memset(amillion_as, 0x61, sizeof(char) * 1000000);
 
 	for(i = 0; i < n; i++) {
-		test_dur = sha3_test(!i, amillion_as);
-		ema = ((ema * (n - 1)) + test_dur) / n;
+		test_dur = (double) sha3_test(!i, amillion_as);
+		ema = (test_dur + (n - 1) * ema) / n;
 	}
 	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
 

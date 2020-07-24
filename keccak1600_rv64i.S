@@ -97,6 +97,20 @@ round_constants:
 .endm
 
 
+/*
+ * Calculate parity of column _col and store value to _out
+ * a0 -> Pointer to A
+ */
+.macro COLUMN_PARITY _out _col
+	/* C[i] = A[i] ^ A[i + 5] ^ A[i + 10] ^ A[i + 15] ^ A[i + 20] */
+	LOAD_5LANES \_col, (\_col + 5), (\_col + 10), (\_col + 15), (\_col + 20)
+	xor 	a3, a3, a4
+	xor	a3, a3, a5
+	xor	a3, a3, a6
+	xor	a3, a3, a7
+	mv	\_out, a3
+.endm
+
 /**********************\
 * KECCAK STEP MAPPINGS *
 \**********************/
@@ -104,7 +118,7 @@ round_constants:
 /*
  * A combined theta_rho step
  * out_lane = rotl64(in_lane ^ D_val, rho_off)
- * in_lane comes from the loaded 
+ * in_lane comes from the loaded
  */
 .macro THETA_RHO_STEP _out_lane, _in_lane, _d_val, _rho_off
 	xor		\_out_lane, \_in_lane, \_d_val
@@ -178,61 +192,11 @@ round_unrolled_cf:
 
 	/* Compute parity of columns and place the
 	 * results on s1 - s5 */
-
-	ld 	t0, 0(a0)	/* C[0] = A[0] */
-	ld 	t1, 40(a0)
-	ld	t2, 80(a0)
-	ld	t3, 120(a0)
-	ld	t4, 160(a0)
-	xor 	t0, t0, t1	/* ^ A[5] */
-	xor	t0, t0, t2	/* ^ A[10] */
-	xor	t0, t0, t3	/* ^ A[15] */
-	xor	t0, t0, t4	/* ^ A[20] */
-	mv	s1, t0
-
-	ld 	t0, 8(a0)	/* C[1] = A[1] */
-	ld 	t1, 48(a0)
-	ld	t2, 88(a0)
-	ld	t3, 128(a0)
-	ld	t4, 168(a0)
-	xor 	t0, t0, t1	/* ^ A[6] */
-	xor	t0, t0, t2	/* ^ A[11] */
-	xor	t0, t0, t3	/* ^ A[16] */
-	xor	t0, t0, t4	/* ^ A[21] */
-	mv	s2, t0
-
-	ld 	t0, 16(a0)	/* C[2] = A[2] */
-	ld 	t1, 56(a0)
-	ld	t2, 96(a0)
-	ld	t3, 136(a0)
-	ld	t4, 176(a0)
-	xor 	t0, t0, t1	/* ^ A[7] */
-	xor	t0, t0, t2	/* ^ A[12] */
-	xor	t0, t0, t3	/* ^ A[17] */
-	xor	t0, t0, t4	/* ^ A[22] */
-	mv	s3, t0
-
-	ld 	t0, 24(a0)	/* C[3] = A[3] */
-	ld 	t1, 64(a0)
-	ld	t2, 104(a0)
-	ld	t3, 144(a0)
-	ld	t4, 184(a0)
-	xor 	t0, t0, t1	/* ^ A[8] */
-	xor	t0, t0, t2	/* ^ A[13] */
-	xor	t0, t0, t3	/* ^ A[18] */
-	xor	t0, t0, t4	/* ^ A[23] */
-	mv	s4, t0
-
-	ld 	t0, 32(a0)	/* C[4] = A[4] */
-	ld 	t1, 72(a0)
-	ld	t2, 112(a0)
-	ld	t3, 152(a0)
-	ld	t4, 192(a0)
-	xor 	t0, t0, t1	/* ^ A[9] */
-	xor	t0, t0, t2	/* ^ A[14] */
-	xor	t0, t0, t3	/* ^ A[19] */
-	xor	t0, t0, t4	/* ^ A[24] */
-	mv	s5, t0
+	COLUMN_PARITY s1 0
+	COLUMN_PARITY s2 1
+	COLUMN_PARITY s3 2
+	COLUMN_PARITY s4 3
+	COLUMN_PARITY s5 4
 
 	/* Calculate theta and overwrite s1 - s5 with
 	 * the D values */

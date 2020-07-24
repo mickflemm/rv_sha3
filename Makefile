@@ -10,7 +10,7 @@ endif
 
 ifeq ($(ARCH),riscv64)
 	generic_SOURCES = keccak1600_rv64i.S
-	TARGETS += rv64i
+	TARGETS += rv64i rv64id
 endif
 
 generic_SOURCES = keccak1600.c keccak1600_sponge.c sha3.c sha3_test.c
@@ -21,7 +21,10 @@ generic_ossl_CFLAGS := $(EXTRA_CFLAGS) -O3
 generic_ossl_LIBS = -lcrypto
 
 rv64i_SOURCES = keccak1600_rv64i.S keccak1600_sponge.c sha3.c sha3_test.c
-rv64i_CFLAGS := -march=rv64i -mabi=lp64 -O3
+rv64i_CFLAGS := -O3
+
+rv64id_SOURCES = keccak1600_rv64id.S keccak1600_sponge.c sha3.c sha3_test.c
+rv64id_CFLAGS := -O3
 
 .PHONY: all clean
 
