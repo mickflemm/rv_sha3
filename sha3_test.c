@@ -8,6 +8,7 @@
 #include <stdlib.h>	/* For malloc() */
 #include <time.h>	/* For clock() */
 #include <string.h>	/* For memset() */
+#include "keccak1600.h"
 #include "sha3.h"
 
 /*
@@ -98,10 +99,58 @@ main()
 	amillion_as = malloc(sizeof(char) * 1000000);
 	memset(amillion_as, 0x61, sizeof(char) * 1000000);
 
+#ifdef OSSL_BUILD
+	printf("\nOpenSSL implementation\n");
+	printf("======================\n");
+	for(i = 0; i < n; i++) {
+		test_dur = (double) sha3_test(!i, amillion_as);
+		ema = (test_dur + (n - 1) * ema) / n;
+	}
+	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
+#else
+	printf("\nSimple implementation\n");
+	printf("=====================\n");
+	keccakf1600_set_permutation_function(&keccakf1600_state_permute_simple, 0);
 	for(i = 0; i < n; i++) {
 		test_dur = (double) sha3_test(!i, amillion_as);
 		ema = (test_dur + (n - 1) * ema) / n;
 	}
 	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
 
+	printf("\nIn-place unrolled\n");
+	printf("=================\n");
+	keccakf1600_set_permutation_function(&keccakf1600_state_permute_inplaceur, 0);
+	for(i = 0; i < n; i++) {
+		test_dur = (double) sha3_test(!i, amillion_as);
+		ema = (test_dur + (n - 1) * ema) / n;
+	}
+	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
+
+	printf("\nUnrolled with intermediate state (cache friendly)\n");
+	printf("=================================================\n");
+	keccakf1600_set_permutation_function(&keccakf1600_state_permute_intermediateur, 0);
+	for(i = 0; i < n; i++) {
+		test_dur = (double) sha3_test(!i, amillion_as);
+		ema = (test_dur + (n - 1) * ema) / n;
+	}
+	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
+
+	printf("\nUnrolled with intermediate state + early parity\n");
+	printf("===============================================\n");
+	keccakf1600_set_permutation_function(&keccakf1600_state_permute_intermediateur_ep, 0);
+	for(i = 0; i < n; i++) {
+		test_dur = (double) sha3_test(!i, amillion_as);
+		ema = (test_dur + (n - 1) * ema) / n;
+	}
+	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
+
+	printf("\nUnrolled with intermediate state + lane complementing\n");
+	printf("=====================================================\n");
+	keccakf1600_set_permutation_function(&keccakf1600_state_permute_intermediateur_lc, 1);
+	for(i = 0; i < n; i++) {
+		test_dur = (double) sha3_test(!i, amillion_as);
+		ema = (test_dur + (n - 1) * ema) / n;
+	}
+	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
+#endif /* OSSL_BUILD */
 }

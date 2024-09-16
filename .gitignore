@@ -35,6 +35,8 @@
 *.i*86
 *.x86_64
 *.hex
+sha3_generic
+sha3_generic_ossl
 
 # Debug files
 *.dSYM/

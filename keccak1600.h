@@ -21,9 +21,9 @@
 #include <stdint.h>	/* For typed integers */
 #include <stddef.h>	/* For size_t */
 
+#define KECCAK_NUM_COLS		5
 #define KECCAK_NUM_ROWS		5
-#define KECCAL_NUM_COLS		5
-#define KECCAK_NUM_LANES	25
+#define KECCAK_NUM_LANES	25	/* KECCAK_NUM_COLS * KECCAK_NUM_ROWS */
 
 typedef uint64_t lane_t;
 #define KECCAK1600_LANE_BITS	64
@@ -43,7 +43,25 @@ typedef union {
 	uint8_t A_bytes[KECCAK1600_STATE_SIZE];
 } k1600_state_t;
 
-void keccakf1600_state_permute(k1600_state_t * st);
+/* Left-rotate a lane, keep it like this so that the
+ * compiler recognizes it and optimizes it using arch-specific
+ * bit manip. instructions. */
+static inline lane_t rotl_lane(lane_t val, int times)
+{
+	return (((val) << (times)) |
+		((val) >> (KECCAK1600_LANE_BITS - (times))));
+}
+
+/* Used for handling multiple underlying implementations */
+typedef void (*keccak1600_spf) (k1600_state_t * st);
+
+void keccakf1600_set_permutation_function(keccak1600_spf func, int lc);
 void keccakf1600_oneshot(const void *msg, size_t msg_len, void *md,
 			 size_t md_len, uint8_t delim_suffix);
 
+/* Available implementations */
+void keccakf1600_state_permute_simple(k1600_state_t *st);
+void keccakf1600_state_permute_inplaceur(k1600_state_t *st);
+void keccakf1600_state_permute_intermediateur(k1600_state_t *st);
+void keccakf1600_state_permute_intermediateur_ep(k1600_state_t *st);
+void keccakf1600_state_permute_intermediateur_lc(k1600_state_t *st);

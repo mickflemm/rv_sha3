@@ -13,11 +13,11 @@ ifeq ($(ARCH),riscv64)
 	TARGETS += rv64i rv64id
 endif
 
-generic_SOURCES = keccak1600.c keccak1600_sponge.c sha3.c sha3_test.c
-generic_CFLAGS := $(EXTRA_CFLAGS) -O3 -DUSE_UNROLLED_CF
+generic_SOURCES = keccak1600*.c sha3.c sha3_test.c
+generic_CFLAGS := $(EXTRA_CFLAGS) -O2
 
 generic_ossl_SOURCES = sha3_ossl.c sha3_test.c
-generic_ossl_CFLAGS := $(EXTRA_CFLAGS) -O3
+generic_ossl_CFLAGS := $(EXTRA_CFLAGS) -O2 -DOSSL_BUILD
 generic_ossl_LIBS = -lcrypto
 
 rv64i_SOURCES = keccak1600_rv64i.S keccak1600_sponge.c sha3.c sha3_test.c

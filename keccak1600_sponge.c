@@ -4,9 +4,17 @@
  * Copyright (C) 2019 Nick Kossifidis <mick@ics.forth.gr>
  */
 
-#include <stddef.h>		/* For size_t */
-#include <string.h>		/* For memcpy() */
 #include "keccak1600.h"
+#include <string.h>		/* For memcpy() */
+#include <stdbool.h>		/* For bool */
+
+/*******************************\
+* WRAPPER FOR STATE PERMUTATION *
+\*******************************/
+/* Stub function so that we don't check for NULL every time */
+static void stub_state_permute(k1600_state_t * st)  { return; }
+static keccak1600_spf keccakf1600_state_permute = &stub_state_permute;
+static bool use_lc = false;
 
 /******************\
 * SPONGE FUNCTIONS *
@@ -69,7 +77,7 @@ keccakf1600_absorb(k1600_state_t * st, const void *msg, size_t msg_len,
 }
 
 static void
-keccakf1600_squeeze(k1600_state_t * st, void *md, size_t md_len)
+keccakf1600_squeeze(k1600_state_t *st, void *md, size_t md_len)
 {
 	int capacity_bytes = 2 * md_len;
 	int rate_bytes = KECCAK1600_STATE_SIZE - capacity_bytes;
@@ -82,6 +90,24 @@ keccakf1600_squeeze(k1600_state_t * st, void *md, size_t md_len)
 		block_len = (i < rate_bytes) ? i : rate_bytes;
 		memcpy(md_off, st->A_bytes, block_len);
 
+		if (use_lc) {
+			/* Apply P mask to output */
+			int lanes_out = block_len / 8;
+			lane_t *md_lanes = (lane_t *) md_off;
+			if (lanes_out > 1)
+				md_lanes[1] = ~md_lanes[1];
+			if (lanes_out > 2)
+				md_lanes[2] = ~md_lanes[2];
+			if (lanes_out > 8)
+				md_lanes[8] = ~md_lanes[8];
+			if (lanes_out > 12)
+				md_lanes[12] = ~md_lanes[12];
+			if (lanes_out > 17)
+				md_lanes[17] = ~md_lanes[17];
+			if (lanes_out > 20)
+				md_lanes[20] = ~md_lanes[20];
+		}
+		
 		md_off += block_len;
 		i -= block_len;
 
@@ -97,10 +123,31 @@ keccakf1600_squeeze(k1600_state_t * st, void *md, size_t md_len)
 \*************/
 
 void
+keccakf1600_set_permutation_function(keccak1600_spf func, int lc)
+{
+	keccakf1600_state_permute = func;
+	if (lc)
+		use_lc = true;
+	else
+		use_lc = false;
+}
+
+void
 keccakf1600_oneshot(const void *msg, size_t msg_len, void *md,
 		    size_t md_len, uint8_t delim_suffix)
 {
 	k1600_state_t st = { 0 };
+
+	/* When doing lane complementing, operate on a
+	 * partialy inverted state. */
+	if (use_lc) {
+		st.A[1] = ~0ULL;
+		st.A[2] = ~0ULL;
+		st.A[8] = ~0ULL;
+		st.A[12] = ~0ULL;
+		st.A[17] = ~0ULL;
+		st.A[20] = ~0ULL;
+	}
 	keccakf1600_absorb(&st, msg, msg_len, md_len, delim_suffix);
 	keccakf1600_squeeze(&st, md, md_len);
 }
