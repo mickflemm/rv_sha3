@@ -15,7 +15,7 @@
 
 .data
 
-.align 16,0
+.align 3
 round_constants:
     .dword 0x0000000000000001
     .dword 0x0000000000008082
@@ -133,8 +133,8 @@ round_constants:
  * the 1st plane and also write the
  * plane in one take
  *
- * a3 - a6 -> N[0]
- * t2 - t6 -> T[0]
+ * a3 - a7 -> A[i : i + 4]
+ * t2 - t6 -> T[]
  */
 .macro CHI
 	not	a3, t3
@@ -165,6 +165,7 @@ round_constants:
  * CHI, with the round constant
  * for this round
  *
+ * a3 - a7 -> A[0 - 4]
  * s10 -> Round counter
  * s7 -> Pointer to round_constants
  */
@@ -176,19 +177,18 @@ round_constants:
 .endm
 
 /*
- * This is the equivalent of keccakf1600_round_unrolled_cf
+ * This is the equivalent of keccakf1600_intermediateur
  * since we don't have enough registers to play with.
  *
  * a0 -> Pointer to state A
  * a1 -> Pointer to state N
  * a2 -> Round index
- * s1 - s5 -> C[0] / D[0]
- * t2 - t6 -> T[0]
+ * s1 - s5 -> C[] / D[]
+ * t2 - t6 -> T[]
  */
-.align 8,0
-.func round_unrolled_cf
-.global round_unrolled_cf
-round_unrolled_cf:
+.align 3
+.func round_intermediate_unrolled
+round_intermediate_unrolled:
 
 	/* Compute parity of columns and place the
 	 * results on s1 - s5 */
@@ -236,7 +236,6 @@ round_unrolled_cf:
 	THETA_RHO_STEP	t5, a6, s3, 21
 	THETA_RHO_STEP	t6, a7, s4, 14
 
-	/* N will be at a3 - a7 */
 	CHI
 
 	/* This is the first plane, apply iota
@@ -296,13 +295,13 @@ round_unrolled_cf:
 /*
  * a0 -> Pointer to A
  */
-.align 8,0
-.func keccakf1600_state_permute
-.global keccakf1600_state_permute
-keccakf1600_state_permute:
+.align 3
+.func keccakf1600_state_permute_rv64i
+.global keccakf1600_state_permute_rv64i
+keccakf1600_state_permute_rv64i:
 	/* Save s registers on the stack and make
-	 * room for the intermediate state T */
-	addi	sp, sp, -304
+	 * room for the intermediate state N */
+	addi	sp, sp, -296
 	sd	s11, 88(sp)
 	sd	s10, 80(sp)
 	sd	s9, 72(sp)
@@ -317,7 +316,7 @@ keccakf1600_state_permute:
 	sd	s0, 0(sp)
 
 	/* Update frame pointer */
-	addi	s0, sp, 304
+	addi	s0, sp, 296
 
 	/* Save return address since
 	 * we'll be making calls from
@@ -332,7 +331,7 @@ keccakf1600_state_permute:
 	addi	a1, sp, 96
 
 1:
-	call	round_unrolled_cf
+	call	round_intermediate_unrolled
 	mv	t0, a0
 	mv	a0, a1
 	mv	a1, t0
@@ -354,6 +353,6 @@ keccakf1600_state_permute:
 	ld	s9, 72(sp)
 	ld	s10, 80(sp)
 	ld	s11, 88(sp)
-	addi	sp, sp, 304
+	addi	sp, sp, 296
 	ret
 .endfunc

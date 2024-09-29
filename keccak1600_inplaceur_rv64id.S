@@ -15,7 +15,7 @@
 
 .data
 
-.align 16,0
+.align 3
 round_constants:
     .dword 0x0000000000000001
     .dword 0x0000000000008082
@@ -74,62 +74,55 @@ round_constants:
 	mv	\_out_lane, t0
 .endm
 
+/* Note that we only need to save / restore
+ * FP regs to / from the stack, in case the
+ * rest of our code uses them (for example
+ * for the sha3_test), if not we can skip this
+ * part.
+ *
+ * Also note that we don't need to save/restore
+ * all of them according to the ABI, so this approach
+ * uses less memory than intermediateur, even when we
+ * do save/restore FP regs.
+ */
 .macro SAVE_FP_REGS _sp_off
-	fld	f25, (\_sp_off + 200)(sp)
-	fld	f24, (\_sp_off + 192)(sp)
-	fld	f23, (\_sp_off + 184)(sp)
-	fld	f22, (\_sp_off + 176)(sp)
-	fld	f21, (\_sp_off + 168)(sp)
-	fld	f20, (\_sp_off + 160)(sp)
-	fld	f19, (\_sp_off + 152)(sp)
-	fld	f18, (\_sp_off + 144)(sp)
-	fld	f17, (\_sp_off + 136)(sp)
-	fld	f16, (\_sp_off + 128)(sp)
-	fld	f15, (\_sp_off + 120)(sp)
-	fld	f14, (\_sp_off + 112)(sp)
-	fld	f13, (\_sp_off + 104)(sp)
-	fld	f12, (\_sp_off + 96)(sp)
-	fld	f11, (\_sp_off + 88)(sp)
-	fld	f10, (\_sp_off + 80)(sp)
-	fld	f9, (\_sp_off + 72)(sp)
-	fld	f8, (\_sp_off + 64)(sp)
-	fld	f7, (\_sp_off + 56)(sp)
-	fld	f6, (\_sp_off + 48)(sp)
-	fld	f5, (\_sp_off + 40)(sp)
-	fld	f4, (\_sp_off + 32)(sp)
-	fld	f3, (\_sp_off + 24)(sp)
-	fld	f2, (\_sp_off + 16)(sp)
-	fld	f1, (\_sp_off + 8)(sp)
-	fld	f0, (\_sp_off)(sp)
+	fsd	fa7, (\_sp_off + 128)(sp)
+	fsd	fa6, (\_sp_off + 120)(sp)
+	fsd	fa5, (\_sp_off + 112)(sp)
+	fsd	fa4, (\_sp_off + 104)(sp)
+	fsd	fa3, (\_sp_off + 96)(sp)
+	fsd	fa2, (\_sp_off + 88)(sp)
+	fsd	fa1, (\_sp_off + 80)(sp)
+	fsd	fa0, (\_sp_off + 72)(sp)
+	fsd	fs8, (\_sp_off + 64)(sp)
+	fsd	fs7, (\_sp_off + 56)(sp)
+	fsd	fs6, (\_sp_off + 48)(sp)
+	fsd	fs5, (\_sp_off + 40)(sp)
+	fsd	fs4, (\_sp_off + 32)(sp)
+	fsd	fs3, (\_sp_off + 24)(sp)
+	fsd	fs2, (\_sp_off + 16)(sp)
+	fsd	fs1, (\_sp_off + 8)(sp)
+	fsd	fs0, (\_sp_off)(sp)
 .endm
 
 .macro RESTORE_FP_REGS _sp_off
-	fsd	f0, (\_sp_off)(sp)
-	fsd	f1, (\_sp_off + 8)(sp)
-	fsd	f2, (\_sp_off + 16)(sp)
-	fsd	f3, (\_sp_off + 24)(sp)
-	fsd	f4, (\_sp_off + 32)(sp)
-	fsd	f5, (\_sp_off + 40)(sp)
-	fsd	f6, (\_sp_off + 48)(sp)
-	fsd	f7, (\_sp_off + 56)(sp)
-	fsd	f8, (\_sp_off + 64)(sp)
-	fsd	f9, (\_sp_off + 72)(sp)
-	fsd	f10, (\_sp_off + 80)(sp)
-	fsd	f11, (\_sp_off + 88)(sp)
-	fsd	f12, (\_sp_off + 96)(sp)
-	fsd	f13, (\_sp_off + 104)(sp)
-	fsd	f14, (\_sp_off + 112)(sp)
-	fsd	f15, (\_sp_off + 120)(sp)
-	fsd	f16, (\_sp_off + 128)(sp)
-	fsd	f17, (\_sp_off + 136)(sp)
-	fsd	f18, (\_sp_off + 144)(sp)
-	fsd	f19, (\_sp_off + 152)(sp)
-	fsd	f20, (\_sp_off + 160)(sp)
-	fsd	f21, (\_sp_off + 168)(sp)
-	fsd	f22, (\_sp_off + 176)(sp)
-	fsd	f23, (\_sp_off + 184)(sp)
-	fsd	f24, (\_sp_off + 192)(sp)
-	fsd	f25, (\_sp_off + 200)(sp)
+	fld	fs0, (\_sp_off)(sp)
+	fld	fs1, (\_sp_off + 8)(sp)
+	fld	fs2, (\_sp_off + 16)(sp)
+	fld	fs3, (\_sp_off + 24)(sp)
+	fld	fs4, (\_sp_off + 32)(sp)
+	fld	fs5, (\_sp_off + 40)(sp)
+	fld	fs6, (\_sp_off + 48)(sp)
+	fld	fs7, (\_sp_off + 56)(sp)
+	fld	fs8, (\_sp_off + 64)(sp)
+	fld	fa0, (\_sp_off + 72)(sp)
+	fld	fa1, (\_sp_off + 80)(sp)
+	fld	fa2, (\_sp_off + 88)(sp)
+	fld	fa3, (\_sp_off + 96)(sp)
+	fld	fa4, (\_sp_off + 104)(sp)
+	fld	fa5, (\_sp_off + 112)(sp)
+	fld	fa6, (\_sp_off + 120)(sp)
+	fld	fa7, (\_sp_off + 128)(sp)
 .endm
 
 .macro GET_LANE _out, _num
@@ -293,17 +286,19 @@ round_constants:
 .endm
 
 /*
- * This is the equivalent of keccakf1600_round_unrolled
- * using fp registers to hold the state
+ * This is the equivalent of keccakf1600_inplaceur
+ * using fp registers to hold the state, reducing
+ * memory accesses. This way we only read/write state
+ * from/to memory once, and only use registers during
+ * state permutation.
  *
  * f0 - f24 -> State
- * t2,f25 -> temp
+ * t2,f28 -> temp
  * s1 - s5 -> C[0] / D[0]
  */
-.align 8,0
-.func round_unrolled
-.global round_unrolled
-round_unrolled:
+.align 3
+.func round_inplace_unrolled
+round_inplace_unrolled:
 	/* Compute parity of columns and place the
 	 * results on s1 - s5 */
 	/* C[i] = A[i] ^ A[i + 5] ^ A[i + 10] ^ A[i + 15] ^ A[i + 20] */
@@ -371,9 +366,9 @@ round_unrolled:
 	THETA_RHO_STEP 17, 11, s1, 10
 	THETA_RHO_STEP 11, 7, s2, 6
 	THETA_RHO_STEP 7, 10, s5, 3
-	/* Use f25 for passing T to THETA_RHO_STEP */
-	SET_LANE 25, t2
-	THETA_RHO_STEP 10, 25, s1, 1
+	/* Use f28 for passing T to THETA_RHO_STEP */
+	SET_LANE 28, t2
+	THETA_RHO_STEP 10, 28, s1, 1
 
 	CHI 0 1 2 3 4
 	CHI 5 6 7 8 9
@@ -393,13 +388,13 @@ round_unrolled:
 /*
  * a0 -> Pointer to A
  */
-.align 8,0
-.func keccakf1600_state_permute
-.global keccakf1600_state_permute
-keccakf1600_state_permute:
+.align 3
+.func keccakf1600_state_permute_rv64id
+.global keccakf1600_state_permute_rv64id
+keccakf1600_state_permute_rv64id:
 	/* Save s registers on the stack and make
 	 * room for the intermediate state T */
-	addi	sp, sp, -304
+	addi	sp, sp, -232
 	SAVE_FP_REGS 96
 	sd	s11, 88(sp)
 	sd	s10, 80(sp)
@@ -415,7 +410,7 @@ keccakf1600_state_permute:
 	sd	s0, 0(sp)
 
 	/* Update frame pointer */
-	addi	s0, sp, 304
+	addi	s0, sp, 232
 
 	/* Save return address since
 	 * we'll be making calls from
@@ -430,7 +425,7 @@ keccakf1600_state_permute:
 
 	LOAD_STATE
 1:
-	call	round_unrolled
+	call	round_inplace_unrolled
 	addi	s10, s10, 1
 	blt	s10, s9, 1b
 	STORE_STATE
@@ -451,6 +446,6 @@ keccakf1600_state_permute:
 	ld	s10, 80(sp)
 	ld	s11, 88(sp)
 	RESTORE_FP_REGS 96
-	addi	sp, sp, 304
+	addi	sp, sp, 232
 	ret
 .endfunc

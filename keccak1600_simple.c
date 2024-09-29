@@ -101,7 +101,7 @@ static const uint_fast8_t pi_lane_idxes[KECCAK_NUM_LANES - 1] =
  * sequence i*(i+1)/2 = (0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66...),
  * modulo the lane size (64). This sequence guarantees that all constants
  * are different and not present more than once. The rotation is applied to
- * (x,y), multiplied by the same transformation matrix as pi, here is the
+ * (x,y), multiplied by the same transformation matrix as pi, here are the
  * constants for each (x,y) on A:
  *
  * Y

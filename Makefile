@@ -4,15 +4,6 @@ $(info $(ARCH))
 
 TARGETS = generic generic_ossl
 
-ifeq ($(ARCH),x86_64)
-	EXTRA_CFLAGS := -march=native -mtune=native
-endif
-
-ifeq ($(ARCH),riscv64)
-	generic_SOURCES = keccak1600_rv64i.S
-	TARGETS += rv64i rv64id
-endif
-
 generic_SOURCES = keccak1600*.c sha3.c sha3_test.c
 generic_CFLAGS := $(EXTRA_CFLAGS) -O2
 
@@ -20,11 +11,14 @@ generic_ossl_SOURCES = sha3_ossl.c sha3_test.c
 generic_ossl_CFLAGS := $(EXTRA_CFLAGS) -O2 -DOSSL_BUILD
 generic_ossl_LIBS = -lcrypto
 
-rv64i_SOURCES = keccak1600_rv64i.S keccak1600_sponge.c sha3.c sha3_test.c
-rv64i_CFLAGS := -O3
+ifeq ($(ARCH),x86_64)
+	EXTRA_CFLAGS := -march=native -mtune=native
+endif
 
-rv64id_SOURCES = keccak1600_rv64id.S keccak1600_sponge.c sha3.c sha3_test.c
-rv64id_CFLAGS := -O3
+ifeq ($(ARCH),riscv64)
+	generic_SOURCES += keccak1600_intermediateur_rv64i.S keccak1600_inplaceur_rv64id.S
+	generic_CFLAGS += -DRVASM_IMPL
+endif
 
 .PHONY: all clean
 

@@ -14,7 +14,7 @@
  * The goal here is to eliminate most of NOTs during the chi step of
  * each round, by performing a transformation before/after
  * absorbing/squeezing. Since here we only deal with state permutation,
- * there extra code for handling lane complementing (masking with P) is
+ * the extra code for handling lane complementing (masking with P) is
  * in keccak1600_sponge.c where absorb/sqeeze is implemented.
  */
 
