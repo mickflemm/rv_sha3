@@ -11,12 +11,6 @@
  * memory / storage constrained environments.
  */
 
-/* To avoid unrolling we need to use mod5 which
- * is costly, so we use a small lookup table. Since we'll
- * go up to x + 4 for 0 < x < 4 we can get away with just
- * 9 bytes.*/
-static const uint8_t mod5[9] = { 0, 1, 2, 3, 4, 0, 1, 2, 3 };
-
 static inline void theta(lane_t *A)
 {
 	uint_fast8_t x = 0;
@@ -30,7 +24,7 @@ static inline void theta(lane_t *A)
 
 	for (x = 0; x < KECCAK_NUM_COLS; x++) {
 		/* Compute D for this column */
-		lane_t D = C[mod5[x + 4]] ^ rotl_lane(C[mod5[x + 1]], 1);
+		lane_t D = C[(x + 4) % 5] ^ rotl_lane(C[(x + 1) % 5], 1);
 
 		/* Apply D to each row of this slice */
 		for (y_offset = 0; y_offset < KECCAK_NUM_LANES; y_offset += 5)
@@ -86,7 +80,7 @@ static inline void chi(lane_t * A)
 			a[x] = A[x + y_offset];
 
 		for (x = 0; x < KECCAK_NUM_COLS; x++)
-			A[x + y_offset] ^= (~a[mod5[x + 1]] & a[mod5[x + 2]]);
+			A[x + y_offset] ^= (~a[(x + 1) % 5] & a[(x + 2) % 5]);
 	}
 }
 
