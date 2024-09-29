@@ -176,6 +176,11 @@ round_constants:
 	xor	a3, a3, t1
 .endm
 
+
+/*************\
+* ENTRY POINT *
+\*************/
+
 /*
  * This is the equivalent of keccakf1600_intermediateur
  * since we don't have enough registers to play with.
@@ -186,10 +191,38 @@ round_constants:
  * s1 - s5 -> C[] / D[]
  * t2 - t6 -> T[]
  */
-.align 3
-.func round_intermediate_unrolled
-round_intermediate_unrolled:
 
+.align 3
+.func keccakf1600_state_permute_intermediateur_rv64i
+.global keccakf1600_state_permute_intermediateur_rv64i
+keccakf1600_state_permute_intermediateur_rv64i:
+	/* Save s registers on the stack and make
+	 * room for the intermediate state N */
+	addi	sp, sp, -296
+	sd	s11, 88(sp)
+	sd	s10, 80(sp)
+	sd	s9, 72(sp)
+	sd	s8, 64(sp)
+	sd	s7, 56(sp)
+	sd	s6, 48(sp)
+	sd	s5, 40(sp)
+	sd	s4, 32(sp)
+	sd	s3, 24(sp)
+	sd	s2, 16(sp)
+	sd	s1, 8(sp)
+	sd	s0, 0(sp)
+
+	/* Update frame pointer */
+	addi	s0, sp, 296
+
+	/* Initialize state */
+	mv	s10, zero
+	li	s9, KECCAK1600_NUM_ROUNDS
+	li	s8, KECCAK1600_LANE_BITS
+	la	s7, round_constants
+	addi	a1, sp, 96
+
+1:
 	/* Compute parity of columns and place the
 	 * results on s1 - s5 */
 	COLUMN_PARITY s1 0
@@ -284,63 +317,13 @@ round_intermediate_unrolled:
 	CHI
 	STORE_5LANES	20, 21, 22, 23, 24
 
-	ret
-.endfunc
-
-
-/*************\
-* ENTRY POINT *
-\*************/
-
-/*
- * a0 -> Pointer to A
- */
-.align 3
-.func keccakf1600_state_permute_rv64i
-.global keccakf1600_state_permute_rv64i
-keccakf1600_state_permute_rv64i:
-	/* Save s registers on the stack and make
-	 * room for the intermediate state N */
-	addi	sp, sp, -296
-	sd	s11, 88(sp)
-	sd	s10, 80(sp)
-	sd	s9, 72(sp)
-	sd	s8, 64(sp)
-	sd	s7, 56(sp)
-	sd	s6, 48(sp)
-	sd	s5, 40(sp)
-	sd	s4, 32(sp)
-	sd	s3, 24(sp)
-	sd	s2, 16(sp)
-	sd	s1, 8(sp)
-	sd	s0, 0(sp)
-
-	/* Update frame pointer */
-	addi	s0, sp, 296
-
-	/* Save return address since
-	 * we'll be making calls from
-	 * here as well */
-	mv 	s11, ra
-
-	/* Initialize state */
-	mv	s10, zero
-	li	s9, KECCAK1600_NUM_ROUNDS
-	li	s8, KECCAK1600_LANE_BITS
-	la	s7, round_constants
-	addi	a1, sp, 96
-
-1:
-	call	round_intermediate_unrolled
 	mv	t0, a0
 	mv	a0, a1
 	mv	a1, t0
 	addi	s10, s10, 1
 	blt	s10, s9, 1b
 
-	/* Restore return address and
-	 * s registers from stack */
-	mv 	ra, s11
+	/* Restore s registers from stack */
 	ld	s0, 0(sp)
 	ld	s1, 8(sp)
 	ld	s2, 16(sp)

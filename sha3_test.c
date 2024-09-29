@@ -170,7 +170,7 @@ main()
 #ifdef RVASM_IMPL
 	printf("\nUnrolled with intermediate state (RV64I)\n");
 	printf("========================================\n");
-	keccakf1600_set_permutation_function(&keccakf1600_state_permute_rv64i, 0);
+	keccakf1600_set_permutation_function(&keccakf1600_state_permute_intermediateur_rv64i, 0);
 	for(i = 0; i < n; i++) {
 		test_dur = (double) sha3_test(!i, amillion_as);
 		ema = (test_dur + (n - 1) * ema) / n;
@@ -180,7 +180,7 @@ main()
 
 	printf("\nIn-place unrolled (RV64ID)\n");
 	printf("==========================\n");
-	keccakf1600_set_permutation_function(&keccakf1600_state_permute_rv64id, 0);
+	keccakf1600_set_permutation_function(&keccakf1600_state_permute_inplaceur_rv64id, 0);
 	for(i = 0; i < n; i++) {
 		test_dur = (double) sha3_test(!i, amillion_as);
 		ema = (test_dur + (n - 1) * ema) / n;

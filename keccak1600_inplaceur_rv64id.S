@@ -285,6 +285,10 @@ round_constants:
 	SET_LANE 0, t0
 .endm
 
+/*************\
+* ENTRY POINT *
+\*************/
+
 /*
  * This is the equivalent of keccakf1600_inplaceur
  * using fp registers to hold the state, reducing
@@ -292,13 +296,48 @@ round_constants:
  * from/to memory once, and only use registers during
  * state permutation.
  *
+ * a0 -> Pointer to A
  * f0 - f24 -> State
  * t2,f28 -> temp
- * s1 - s5 -> C[0] / D[0]
+ * s1 - s5 -> C[] / D[]
  */
 .align 3
-.func round_inplace_unrolled
-round_inplace_unrolled:
+.func keccakf1600_state_permute_inplaceur_rv64id
+.global keccakf1600_state_permute_inplaceur_rv64id
+keccakf1600_state_permute_inplaceur_rv64id:
+	/* Save s registers on the stack and make
+	 * room for the intermediate state T */
+	addi	sp, sp, -232
+	SAVE_FP_REGS 96
+	sd	s11, 88(sp)
+	sd	s10, 80(sp)
+	sd	s9, 72(sp)
+	sd	s8, 64(sp)
+	sd	s7, 56(sp)
+	sd	s6, 48(sp)
+	sd	s5, 40(sp)
+	sd	s4, 32(sp)
+	sd	s3, 24(sp)
+	sd	s2, 16(sp)
+	sd	s1, 8(sp)
+	sd	s0, 0(sp)
+
+	/* Update frame pointer */
+	addi	s0, sp, 232
+
+	/* Save return address since
+	 * we'll be making calls from
+	 * here as well */
+	mv 	s11, ra
+
+	/* Initialize state */
+	mv	s10, zero
+	li	s9, KECCAK1600_NUM_ROUNDS
+	li	s8, KECCAK1600_LANE_BITS
+	la	s7, round_constants
+
+	LOAD_STATE
+1:
 	/* Compute parity of columns and place the
 	 * results on s1 - s5 */
 	/* C[i] = A[i] ^ A[i + 5] ^ A[i + 10] ^ A[i + 15] ^ A[i + 20] */
@@ -377,55 +416,7 @@ round_inplace_unrolled:
 	CHI 20 21 22 23 24
 
 	IOTA
-	ret
-.endfunc
 
-
-/*************\
-* ENTRY POINT *
-\*************/
-
-/*
- * a0 -> Pointer to A
- */
-.align 3
-.func keccakf1600_state_permute_rv64id
-.global keccakf1600_state_permute_rv64id
-keccakf1600_state_permute_rv64id:
-	/* Save s registers on the stack and make
-	 * room for the intermediate state T */
-	addi	sp, sp, -232
-	SAVE_FP_REGS 96
-	sd	s11, 88(sp)
-	sd	s10, 80(sp)
-	sd	s9, 72(sp)
-	sd	s8, 64(sp)
-	sd	s7, 56(sp)
-	sd	s6, 48(sp)
-	sd	s5, 40(sp)
-	sd	s4, 32(sp)
-	sd	s3, 24(sp)
-	sd	s2, 16(sp)
-	sd	s1, 8(sp)
-	sd	s0, 0(sp)
-
-	/* Update frame pointer */
-	addi	s0, sp, 232
-
-	/* Save return address since
-	 * we'll be making calls from
-	 * here as well */
-	mv 	s11, ra
-
-	/* Initialize state */
-	mv	s10, zero
-	li	s9, KECCAK1600_NUM_ROUNDS
-	li	s8, KECCAK1600_LANE_BITS
-	la	s7, round_constants
-
-	LOAD_STATE
-1:
-	call	round_inplace_unrolled
 	addi	s10, s10, 1
 	blt	s10, s9, 1b
 	STORE_STATE

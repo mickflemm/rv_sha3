@@ -66,6 +66,6 @@ void keccakf1600_state_permute_inplaceur(k1600_state_t *st);
 void keccakf1600_state_permute_intermediateur(k1600_state_t *st);
 void keccakf1600_state_permute_intermediateur_ep(k1600_state_t *st);
 void keccakf1600_state_permute_intermediateur_lc(k1600_state_t *st);
-void keccakf1600_state_permute_rv64i(k1600_state_t *st);
-void keccakf1600_state_permute_rv64id(k1600_state_t *st);
+void keccakf1600_state_permute_intermediateur_rv64i(k1600_state_t *st);
+void keccakf1600_state_permute_inplaceur_rv64id(k1600_state_t *st);
 
