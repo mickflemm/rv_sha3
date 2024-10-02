@@ -1,17 +1,30 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
  * Keccak-f[1600] RV64I Implementation - State permutation
- * Copyright (C) 2019 Nick Kossifidis <mick@ics.forth.gr>
+ * Copyright (C) 2024 Nick Kossifidis <mick@ics.forth.gr>
  */
 
-#define KECCAK_NUM_ROWS		5
-#define KECCAK_NUM_COLS		5
-#define KECCAK_NUM_LANES	25
 
-#define KECCAK1600_LANE_BITS	64
-#define	KECCAK1600_LANE_BYTES	8
-#define KECCAK1600_NUM_ROUNDS	24	/* 12 + 2^log2(KECCAK1600_LANE_BITS) */
-#define KECCAK1600_STATE_SIZE	200	/* 1600 bits (lane_size * num_lanes) */
+/*
+ * This is the equivalent of keccakf1600_intermediateur
+ * since we don't have enough registers to play with.
+ * In my tests this is slightly smaller than the compiled
+ * C version, uses less memory, and is also a bit faster,
+ * but overall the differnce is minimal, I have it here
+ * mostly for reference.
+ *
+ * Allocated registers:
+ * a0 -> Pointer to state A
+ * sp -> Pointer to state N (since N is allocated on the stack)
+ * t1 - t5 -> T[]
+ * a1 - a5 -> a[]/A[]/N[]
+ * s1 - s5 -> C[]/D[]
+ * a6 -> Round counter
+ * a7 -> Pointer to round_constants
+ */
+
+
+#define KECCAK1600_NUM_ROUNDS	24
 
 .data
 
@@ -44,72 +57,66 @@ round_constants:
 
 .text
 
-/*
- * Reserved registers:
- *
- * s11 -> Return address
- * s10 -> Round counter
- * s9  -> KECCAK1600_NUM_ROUNDS
- * s8  -> KECCAK1600_LANE_BITS
- * s7  -> Pointer to round_constants
- */
-
-
 /*********\
 * HELPERS *
 \*********/
 
-/*
- * Left-rotate a lane
- * s8  -> KECCAK1600_LANE_BITS
- */
-.macro ROTL_LANE _out_lane _in_lane _times
-	li	t1, \_times
-	sll	t0, \_in_lane, t1
-	sub	t1, s8, t1
-	srl	t1, \_in_lane, t1
-	or	t0, t0, t1
-	mv	\_out_lane, t0
+.macro _ROTL _out, _in, _times
+        #if defined(__riscv_zbb)
+        rori    \_out, \_in, (64 - \_times)
+        #else
+        slli    t0, \_in, \_times
+        srli    t6, \_in, (64 - \_times)
+        or      \_out, t0, t6
+        #endif
 .endm
 
+.macro _ANDN _out, _a1, _a2
+        #if defined(__riscv_zbb)
+        andn    \_out, \_a2, \_a1
+        #else
+        not     \_out, \_a1
+        and     \_out, \_out, \_a2
+        #endif
+.endm
+
+
 /*
- * Load 5 lanes from A to a3 - a7
+ * Load 5 lanes from A to a1 - a5
  * a0 -> Pointer to A
  */
 .macro LOAD_5LANES _a _b _c _d _e
-	ld	a3, (8 * \_a)(a0)
-	ld	a4, (8 * \_b)(a0)
-	ld	a5, (8 * \_c)(a0)
-	ld	a6, (8 * \_d)(a0)
-	ld	a7, (8 * \_e)(a0)
+	ld	a1, (8 * \_a)(a0)
+	ld	a2, (8 * \_b)(a0)
+	ld	a3, (8 * \_c)(a0)
+	ld	a4, (8 * \_d)(a0)
+	ld	a5, (8 * \_e)(a0)
 .endm
 
 /*
- * Store 5 lanes from a3 - a7 to N
- * a1 -> Pointer to N
+ * Store 5 lanes from a1 - a5 to N
+ * sp -> Pointer to N
  */
 .macro STORE_5LANES _a _b _c _d _e
-	sd	a3, (8 * \_a)(a1)
-	sd	a4, (8 * \_b)(a1)
-	sd	a5, (8 * \_c)(a1)
-	sd	a6, (8 * \_d)(a1)
-	sd	a7, (8 * \_e)(a1)
+	sd	a1, (8 * \_a)(sp)
+	sd	a2, (8 * \_b)(sp)
+	sd	a3, (8 * \_c)(sp)
+	sd	a4, (8 * \_d)(sp)
+	sd	a5, (8 * \_e)(sp)
 .endm
-
 
 /*
  * Calculate parity of column _col and store value to _out
- * a0 -> Pointer to A
+ * C[i] = A[i] ^ A[i + 5] ^ A[i + 10] ^ A[i + 15] ^ A[i + 20]
  */
 .macro COLUMN_PARITY _out _col
-	/* C[i] = A[i] ^ A[i + 5] ^ A[i + 10] ^ A[i + 15] ^ A[i + 20] */
-	LOAD_5LANES \_col, (\_col + 5), (\_col + 10), (\_col + 15), (\_col + 20)
-	xor 	a3, a3, a4
-	xor	a3, a3, a5
-	xor	a3, a3, a6
-	xor	a3, a3, a7
-	mv	\_out, a3
+        LOAD_5LANES \_col, (\_col + 5), (\_col + 10), (\_col + 15), (\_col + 20)
+        xor     a1, a1, a2
+        xor     a2, a3, a4
+        xor     a3, a5, a1
+        xor     \_out, a3, a2
 .endm
+
 
 /**********************\
 * KECCAK STEP MAPPINGS *
@@ -118,62 +125,50 @@ round_constants:
 /*
  * A combined theta_rho step
  * out_lane = rotl64(in_lane ^ D_val, rho_off)
- * in_lane comes from the loaded
+ * note that in_lane is already pi-mapped
  */
 .macro THETA_RHO_STEP _out_lane, _in_lane, _d_val, _rho_off
-	xor		\_out_lane, \_in_lane, \_d_val
-	ROTL_LANE 	\_out_lane, \_out_lane, \_rho_off
+	xor	\_out_lane, \_in_lane, \_d_val
+	_ROTL	\_out_lane, \_out_lane, \_rho_off
 .endm
 
 /*
  * A Chi step on the plane
+ * A[i + y_offset] ^= (~a[i + 1] & a[i + 2])
  *
- * Reuse a3 - a7 so that we can
- * do iota on the 1st lane of
- * the 1st plane and also write the
- * plane in one take
+ * Here a is on T[] and A[i : i + 4] on a1 - a5.
  *
- * a3 - a7 -> A[i : i + 4]
- * t2 - t6 -> T[]
+ * Reuse a1 - a5 so that we store them afterwards
+ * to N. Also group _ANDNs and xors together to
+ * prevent stalls when possible (e.g. when zbb
+ * is available).
  */
 .macro CHI
-	not	a3, t3
-	and	a3, a3, t4
-	xor	a3, a3, t2
+        _ANDN   a1, t2, t3
+        _ANDN   a2, t3, t4
+        _ANDN   a3, t4, t5
+        _ANDN   a4, t5, t1
+        _ANDN   a5, t1, t2
 
-	not	a4, t4
-	and	a4, a4, t5
-	xor	a4, a4, t3
-
-	not	a5, t5
-	and	a5, a5, t6
-	xor	a5, a5, t4
-
-	not	a6, t6
-	and	a6, a6, t2
-	xor	a6, a6, t5
-
-	not	a7, t2
-	and	a7, a7, t3
-	xor	a7, a7, t6
+        xor     a1, a1, t1
+        xor     a2, a2, t2
+        xor     a3, a3, t3
+        xor     a4, a4, t4
+        xor     a5, a5, t5
 .endm
 
 /*
- * Apply iota by xoring the
- * first lane of the first
- * plane, stored in a3 after
- * CHI, with the round constant
- * for this round
+ * Apply iota on A[0] (a1) by xoring it
+ * with the round constant for this round
  *
- * a3 - a7 -> A[0 - 4]
- * s10 -> Round counter
- * s7 -> Pointer to round_constants
+ * a6 -> Round counter
+ * a7 -> Pointer to round_constants
  */
 .macro IOTA
-	slli	t0, s10, 3
-	add	t0, t0, s7
-	ld	t1, 0(t0)
-	xor	a3, a3, t1
+	slli	t0, a6, 3
+	add	t0, t0, a7
+	ld	t0, 0(t0)
+	xor	a1, a1, t0
 .endm
 
 
@@ -181,46 +176,25 @@ round_constants:
 * ENTRY POINT *
 \*************/
 
-/*
- * This is the equivalent of keccakf1600_intermediateur
- * since we don't have enough registers to play with.
- *
- * a0 -> Pointer to state A
- * a1 -> Pointer to state N
- * a2 -> Round index
- * s1 - s5 -> C[] / D[]
- * t2 - t6 -> T[]
- */
-
 .align 3
 .func keccakf1600_state_permute_intermediateur_rv64i
 .global keccakf1600_state_permute_intermediateur_rv64i
 keccakf1600_state_permute_intermediateur_rv64i:
 	/* Save s registers on the stack and make
-	 * room for the intermediate state N */
-	addi	sp, sp, -296
-	sd	s11, 88(sp)
-	sd	s10, 80(sp)
-	sd	s9, 72(sp)
-	sd	s8, 64(sp)
-	sd	s7, 56(sp)
-	sd	s6, 48(sp)
-	sd	s5, 40(sp)
-	sd	s4, 32(sp)
-	sd	s3, 24(sp)
-	sd	s2, 16(sp)
-	sd	s1, 8(sp)
-	sd	s0, 0(sp)
-
-	/* Update frame pointer */
-	addi	s0, sp, 296
+	 * room for the intermediate state N. No
+	 * need to save ra since we won't be calling
+	 * any functions from here, and also ignore
+	 * the frame pointer. */
+	addi	sp, sp, -240
+	sd	s1, 232(sp)
+	sd	s2, 224(sp)
+	sd	s3, 216(sp)
+	sd	s4, 208(sp)
+	sd	s5, 200(sp)
 
 	/* Initialize state */
-	mv	s10, zero
-	li	s9, KECCAK1600_NUM_ROUNDS
-	li	s8, KECCAK1600_LANE_BITS
-	la	s7, round_constants
-	addi	a1, sp, 96
+	mv	a6, zero
+	la	a7, round_constants
 
 1:
 	/* Compute parity of columns and place the
@@ -231,111 +205,90 @@ keccakf1600_state_permute_intermediateur_rv64i:
 	COLUMN_PARITY s4 3
 	COLUMN_PARITY s5 4
 
-	/* Calculate theta and overwrite s1 - s5 with
-	 * the D values */
+	/* Calculate theta and overwrite s1 - s5 with D[]
+	 * C[i -1] ^= rotl_lane(C[i + 1], 1) -> D[i] */
 
-	/* T[0] = C[4] */
-	mv	t2, s5
+	_ROTL	t1, s1, 1
+	_ROTL	t2, s2, 1
+	_ROTL	t3, s3, 1
+	_ROTL	t4, s4, 1
+	_ROTL	t5, s5, 1
 
-	/* C[4] ^= rotl_lane(C[1], 1);	-> D[0] */
-	ROTL_LANE	t3, s2, 1
-	xor		s5, s5, t3
+	xor	s5, s5, t2	// D[0]
+	xor	s1, s1, t3	// D[1]
+	xor	s2, s2, t4	// D[2]
+	xor	s3, s3, t5	// D[3]
+	xor	s4, s4, t1	// D[4]
 
-	/* C[1] ^= rotl_lane(C[3], 1);	-> D[2] */
-	ROTL_LANE	t3, s4, 1
-	xor		s2, s2, t3
-
-	/* C[3] ^= rotl_lane(C[0], 1);	-> D[4] */
-	ROTL_LANE	t3, s1, 1
-	xor		s4, s4, t3
-
-	/* C[0] ^= rotl_lane(C[2], 1);	-> D[1] */
-	ROTL_LANE	t3, s3, 1
-	xor		s1, s1, t3
-
-	/* C[2] ^= rotl_lane(T[0], 1);	-> D[3] */
-	ROTL_LANE	t3, t2, 1
-	xor		s3, s3, t3
-
-
-	/* Plane by plane processing,
-	 * T is stored on t2 - t6 */
-
+	/* 1st plane */
 	LOAD_5LANES	0, 6, 12, 18, 24
-
-	xor		t2, a3, s5
-	THETA_RHO_STEP	t3, a4, s1, 44
-	THETA_RHO_STEP	t4, a5, s2, 43
-	THETA_RHO_STEP	t5, a6, s3, 21
-	THETA_RHO_STEP	t6, a7, s4, 14
-
+	xor		t1, a1, s5
+	THETA_RHO_STEP	t2, a2, s1, 44
+	THETA_RHO_STEP	t3, a3, s2, 43
+	THETA_RHO_STEP	t4, a4, s3, 21
+	THETA_RHO_STEP	t5, a5, s4, 14
 	CHI
-
 	/* This is the first plane, apply iota
 	 * on N[0] (a3) since we are here */
 	IOTA
-
 	STORE_5LANES	0, 1, 2, 3, 4
 
 	/* 2nd plane */
 	LOAD_5LANES	3, 9, 10, 16, 22
-	THETA_RHO_STEP	t2, a3, s3, 28
-	THETA_RHO_STEP	t3, a4, s4, 20
-	THETA_RHO_STEP	t4, a5, s5, 3
-	THETA_RHO_STEP	t5, a6, s1, 45
-	THETA_RHO_STEP	t6, a7, s2, 61
+	THETA_RHO_STEP	t1, a1, s3, 28
+	THETA_RHO_STEP	t2, a2, s4, 20
+	THETA_RHO_STEP	t3, a3, s5, 3
+	THETA_RHO_STEP	t4, a4, s1, 45
+	THETA_RHO_STEP	t5, a5, s2, 61
 	CHI
 	STORE_5LANES	5, 6, 7, 8, 9
 
 	/* 3rd plane */
 	LOAD_5LANES	1, 7, 13, 19, 20
-	THETA_RHO_STEP	t2, a3, s1, 1
-	THETA_RHO_STEP	t3, a4, s2, 6
-	THETA_RHO_STEP	t4, a5, s3, 25
-	THETA_RHO_STEP	t5, a6, s4, 8
-	THETA_RHO_STEP	t6, a7, s5, 18
+	THETA_RHO_STEP	t1, a1, s1, 1
+	THETA_RHO_STEP	t2, a2, s2, 6
+	THETA_RHO_STEP	t3, a3, s3, 25
+	THETA_RHO_STEP	t4, a4, s4, 8
+	THETA_RHO_STEP	t5, a5, s5, 18
 	CHI
 	STORE_5LANES	10, 11, 12, 13, 14
 
 	/* 4rth plane */
 	LOAD_5LANES	4, 5, 11, 17, 23
-	THETA_RHO_STEP	t2, a3, s4, 27
-	THETA_RHO_STEP	t3, a4, s5, 36
-	THETA_RHO_STEP	t4, a5, s1, 10
-	THETA_RHO_STEP	t5, a6, s2, 15
-	THETA_RHO_STEP	t6, a7, s3, 56
+	THETA_RHO_STEP	t1, a1, s4, 27
+	THETA_RHO_STEP	t2, a2, s5, 36
+	THETA_RHO_STEP	t3, a3, s1, 10
+	THETA_RHO_STEP	t4, a4, s2, 15
+	THETA_RHO_STEP	t5, a5, s3, 56
 	CHI
 	STORE_5LANES	15, 16, 17, 18, 19
 
 	/* 5th plane */
 	LOAD_5LANES	2, 8, 14, 15, 21
-	THETA_RHO_STEP	t2, a3, s2, 62
-	THETA_RHO_STEP	t3, a4, s3, 55
-	THETA_RHO_STEP	t4, a5, s4, 39
-	THETA_RHO_STEP	t5, a6, s5, 41
-	THETA_RHO_STEP	t6, a7, s1, 2
+	THETA_RHO_STEP	t1, a1, s2, 62
+	THETA_RHO_STEP	t2, a2, s3, 55
+	THETA_RHO_STEP	t3, a3, s4, 39
+	THETA_RHO_STEP	t4, a4, s5, 41
+	THETA_RHO_STEP	t5, a5, s1, 2
 	CHI
 	STORE_5LANES	20, 21, 22, 23, 24
 
+	/* Swap a0 <-> sp, since we have an
+	 * even number of rounds, we'll end up
+	 * with the correct value on sp. */
 	mv	t0, a0
-	mv	a0, a1
-	mv	a1, t0
-	addi	s10, s10, 1
-	blt	s10, s9, 1b
+	mv	a0, sp
+	mv	sp, t0
+	addi	a6, a6, 1
+	li	t1, KECCAK1600_NUM_ROUNDS
+	blt	a6, t1, 1b
 
-	/* Restore s registers from stack */
-	ld	s0, 0(sp)
-	ld	s1, 8(sp)
-	ld	s2, 16(sp)
-	ld	s3, 24(sp)
-	ld	s4, 32(sp)
-	ld	s5, 40(sp)
-	ld	s6, 48(sp)
-	ld	s7, 56(sp)
-	ld	s8, 64(sp)
-	ld	s9, 72(sp)
-	ld	s10, 80(sp)
-	ld	s11, 88(sp)
-	addi	sp, sp, 296
+	/* Restore stack */
+	ld	s5, 200(sp)
+	ld	s4, 208(sp)
+	ld	s3, 216(sp)
+	ld	s2, 224(sp)
+	ld	s1, 232(sp)
+	addi	sp, sp, 240
 	ret
 .endfunc
