@@ -45,7 +45,7 @@ typedef union {
 
 /* Left-rotate a lane, keep it like this so that the
  * compiler recognizes it and optimizes it using arch-specific
- * bit manip. instructions. */
+ * bit manip. instructions (rol, rori etc). */
 static inline lane_t rotl_lane(lane_t val, int times)
 {
 	return (((val) << (times)) |

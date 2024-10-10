@@ -16,6 +16,8 @@
  * absorbing/squeezing. Since here we only deal with state permutation,
  * the extra code for handling lane complementing (masking with P) is
  * in keccak1600_sponge.c where absorb/sqeeze is implemented.
+ *
+ * When Zbb is not used, it's the most performant implementation in my tests.
  */
 
 static const lane_t round_constants[KECCAK1600_NUM_ROUNDS] =

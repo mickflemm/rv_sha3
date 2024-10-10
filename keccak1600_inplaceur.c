@@ -11,6 +11,9 @@
  * with some further cleanups to see how well it competes
  * with the compiler's optimizations. It also provides a
  * more compact view of what's going on.
+ *
+ * When Zbb is enabled, it's the most performant implementation
+ * in my tests.
  */
 
 static const lane_t round_constants[KECCAK1600_NUM_ROUNDS] =
