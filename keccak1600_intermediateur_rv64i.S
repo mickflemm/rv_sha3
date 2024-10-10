@@ -62,22 +62,22 @@ round_constants:
 \*********/
 
 .macro _ROTL _out, _in, _times
-        #if defined(__riscv_zbb)
-        rori    \_out, \_in, (64 - \_times)
-        #else
-        slli    t0, \_in, \_times
-        srli    t6, \_in, (64 - \_times)
-        or      \_out, t0, t6
-        #endif
+	#if defined(__riscv_zbb)
+	rori	\_out, \_in, (64 - \_times)
+	#else
+	slli	t0, \_in, \_times
+	srli	t6, \_in, (64 - \_times)
+	or	\_out, t0, t6
+	#endif
 .endm
 
 .macro _ANDN _out, _a1, _a2
-        #if defined(__riscv_zbb)
-        andn    \_out, \_a2, \_a1
-        #else
-        not     \_out, \_a1
-        and     \_out, \_out, \_a2
-        #endif
+	#if defined(__riscv_zbb)
+	andn	\_out, \_a2, \_a1
+	#else
+	not	\_out, \_a1
+	and	\_out, \_out, \_a2
+	#endif
 .endm
 
 
@@ -110,11 +110,11 @@ round_constants:
  * C[i] = A[i] ^ A[i + 5] ^ A[i + 10] ^ A[i + 15] ^ A[i + 20]
  */
 .macro COLUMN_PARITY _out _col
-        LOAD_5LANES \_col, (\_col + 5), (\_col + 10), (\_col + 15), (\_col + 20)
-        xor     a1, a1, a2
-        xor     a2, a3, a4
-        xor     a3, a5, a1
-        xor     \_out, a3, a2
+	LOAD_5LANES \_col, (\_col + 5), (\_col + 10), (\_col + 15), (\_col + 20)
+	xor	a1, a1, a2
+	xor	a2, a3, a4
+	xor	a3, a5, a1
+	xor	\_out, a3, a2
 .endm
 
 
@@ -144,17 +144,17 @@ round_constants:
  * is available).
  */
 .macro CHI
-        _ANDN   a1, t2, t3
-        _ANDN   a2, t3, t4
-        _ANDN   a3, t4, t5
-        _ANDN   a4, t5, t1
-        _ANDN   a5, t1, t2
+	_ANDN	a1, t2, t3
+	_ANDN	a2, t3, t4
+	_ANDN	a3, t4, t5
+	_ANDN	a4, t5, t1
+	_ANDN	a5, t1, t2
 
-        xor     a1, a1, t1
-        xor     a2, a2, t2
-        xor     a3, a3, t3
-        xor     a4, a4, t4
-        xor     a5, a5, t5
+	xor	a1, a1, t1
+	xor	a2, a2, t2
+	xor	a3, a3, t3
+	xor	a4, a4, t4
+	xor	a5, a5, t5
 .endm
 
 /*

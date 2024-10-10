@@ -108,19 +108,9 @@ main()
 	}
 	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
 #else
-	printf("\nSimple implementation\n");
-	printf("=====================\n");
-	keccakf1600_set_permutation_function(&keccakf1600_state_permute_simple, 0);
-	for(i = 0; i < n; i++) {
-		test_dur = (double) sha3_test(!i, amillion_as);
-		ema = (test_dur + (n - 1) * ema) / n;
-	}
-	printf("Test took an avg of %lg sec (%lg clock ticks)\n", ema / CLOCKS_PER_SEC, ema);
-	ema = 0;
-
-	printf("\nCompact implementation\n");
-	printf("======================\n");
-	keccakf1600_set_permutation_function(&keccakf1600_state_permute_compact, 0);
+	printf("\nReference implementation\n");
+	printf("========================\n");
+	keccakf1600_set_permutation_function(&keccakf1600_state_permute_ref, 0);
 	for(i = 0; i < n; i++) {
 		test_dur = (double) sha3_test(!i, amillion_as);
 		ema = (test_dur + (n - 1) * ema) / n;

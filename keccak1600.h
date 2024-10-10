@@ -60,8 +60,7 @@ void keccakf1600_oneshot(const void *msg, size_t msg_len, void *md,
 			 size_t md_len, uint8_t delim_suffix);
 
 /* Available implementations */
-void keccakf1600_state_permute_simple(k1600_state_t *st);
-void keccakf1600_state_permute_compact(k1600_state_t *st);
+void keccakf1600_state_permute_ref(k1600_state_t *st);
 void keccakf1600_state_permute_inplaceur(k1600_state_t *st);
 void keccakf1600_state_permute_intermediateur(k1600_state_t *st);
 void keccakf1600_state_permute_intermediateur_ep(k1600_state_t *st);

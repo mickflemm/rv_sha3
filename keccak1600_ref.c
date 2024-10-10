@@ -118,12 +118,28 @@ static const uint_fast8_t pi_lane_idxes[KECCAK_NUM_LANES - 1] =
  * However since we follow the pi mapping anyway, we can apply rho together with pi,
  * and this array just becomes the same as the sequence, we keep it here for convenience:
  */
+ #if !defined(__OPTIMIZE_SIZE__)
 static const uint_fast8_t rho_offsets[KECCAK_NUM_LANES - 1] =
 	{ 1,  3,  6, 10, 15,
 	 21, 28, 36, 45, 55,
 	  2, 14, 27, 41, 56,
 	  8, 25, 43, 62, 18,
 	 39, 61, 20, 44};
+static inline int get_rho_for_idx(int idx)
+{
+	return rho_offsets[idx];
+}
+#else
+ /* This will return the rotation constants for each index
+ * of pi_lane_idxes, since it's the sequence (i*(i+1) / 2)
+ * mod 64 (when following the pi mapping), it's simple/fast
+ * to calculate it and is still smaller than the 23byte lookup table. */
+static inline int get_rho_for_idx(int idx)
+{
+	int i = idx + 1; /* Start from 1 since 0,0 is ignored */
+	return ((i * (i + 1)) >> 1) & 0x3F;
+}
+#endif
 
 static inline void rho_pi(lane_t *A)
 {
@@ -131,10 +147,10 @@ static inline void rho_pi(lane_t *A)
 	lane_t first = A[1]; /* Save (1,0) for the last step */
 	for (i = KECCAK_NUM_LANES - 2; i > 0; i--) {
 		lane_t next = A[pi_lane_idxes[i - 1]];
-		A[pi_lane_idxes[i]] = rotl_lane(next, rho_offsets[i]);
+		A[pi_lane_idxes[i]] = rotl_lane(next, get_rho_for_idx(i));
 	}
 	/* Reached (0,2), move to (1,0) */
-	A[pi_lane_idxes[0]] = rotl_lane(first, rho_offsets[0]);
+	A[pi_lane_idxes[0]] = rotl_lane(first, get_rho_for_idx(0));
 }
 
 /*
@@ -181,6 +197,7 @@ static inline void chi(lane_t *A)
  * constants to be xored as the authors intended, the table comes from
  * https://keccak.team/keccak_specs_summary.html
  */
+ #if !defined(__OPTIMIZE_SIZE__)
  static const lane_t round_constants[KECCAK1600_NUM_ROUNDS] =
  	{ 0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808aULL,
 	  0x8000000080008000ULL, 0x000000000000808bULL, 0x0000000080000001ULL,
@@ -195,14 +212,39 @@ static inline void iota(lane_t *A, unsigned int round)
 {
 	A[0] ^= round_constants[round];
 }
+#else
+/* Storing round constants in 64bit format takes a lot of space, calculating them
+ * using the LFSR on each round is on the other hand quite slow. Here we take advantage
+ * of the fact that rc constants only use bits 2^i - 1 (so 0, 1, 3, 7, 15, 31, 63), so
+ * we can map those bits to a 7bit set, and use a byte instead of 8bytes for each rc. */
+static const uint8_t rc_compressed[KECCAK1600_NUM_ROUNDS] =
+	{ 0x01, 0x1A, 0x5E, 0x70, 0x1F, 0x21, 0x79, 0x55,
+	  0x0E, 0x0C, 0x35, 0x26, 0x3F, 0x4F, 0x5D, 0x53,
+	  0x52, 0x48, 0x16, 0x66, 0x79, 0x58, 0x21, 0x74 };
 
+static inline void iota(lane_t *A, unsigned int round)
+{
+	uint64_t rc = 0;
+	uint8_t rc_comp = rc_compressed[round];
+	int i = 0;
+	for (i = 0; i < 7; i++) {
+		/* bit position on rc (2^i - 1) */
+		unsigned int bit_i = (1 << i) - 1;
+		/* bit position on compressed rc */
+		unsigned int bit_c = 1 << i;
+		if(rc_comp & bit_c)
+                        rc |= 1ULL << bit_i;
+        }
+	A[0] ^= rc;
+}
+#endif
 
 /**********************************************\
 * KECCAK-F1600 STATE PERMUTATION / ENTRY POINT *
 \**********************************************/
 
 void
-keccakf1600_state_permute_simple(k1600_state_t *st)
+keccakf1600_state_permute_ref(k1600_state_t *st)
 {
 	int i = 0;
 	for (i = 0; i < KECCAK1600_NUM_ROUNDS; i++) {
